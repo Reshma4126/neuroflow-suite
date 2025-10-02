@@ -1,0 +1,61 @@
+name: NeuroFlow Suite CI/CD
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: test_user
+          MONGO_INITDB_ROOT_PASSWORD: test_password
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+        
+      - name: Run backend tests
+        working-directory: ./backend
+        run: npm test
+        env:
+          MONGODB_URI: mongodb://test_user:test_password@localhost:27017/test_db?authSource=admin
+          JWT_SECRET: test_secret_key
+          
+      - name: Check backend build
+        working-directory: ./backend
+        run: node server.js &
+        
+  build-docker:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Build Docker images
+        run: docker-compose build
+        
+      - name: Test Docker containers
+        run: |
+          docker-compose up -d
+          sleep 10
+          docker-compose ps
+          docker-compose down

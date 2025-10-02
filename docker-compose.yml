@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   mongodb:
@@ -15,6 +14,11 @@ services:
       - mongodb-data:/data/db
     networks:
       - neuroflow-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mongo-express:
     image: mongo-express:latest
@@ -30,9 +34,35 @@ services:
       ME_CONFIG_BASICAUTH_USERNAME: admin
       ME_CONFIG_BASICAUTH_PASSWORD: hackathon2025
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - neuroflow-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: neuroflow-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: mongodb://neuroflow_admin:secure_password_123@mongodb:27017/neuroflow_db?authSource=admin
+      JWT_SECRET: neuroflow_production_secret_key_12345
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - neuroflow-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   mongodb-data:

@@ -12,7 +12,8 @@ app.use(express.json());
 
 // Simple auth middleware (mock for now - Team Member 1 will implement JWT)
 app.use((req, res, next) => {
-  req.user = { id: 'mock_user_id_12345' }; // Mock user for testing
+ req.user = { id: '507f1f77bcf86cd799439011' }; // Mock user for testing (valid ObjectId)
+
   next();
 });
 
