@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroFlow - Face Recognition Login</title>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+    
+    h2 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .video-container {
+      margin: 20px 0;
+      position: relative;
+    }
+    
+    video {
+      width: 100%;
+      max-width: 400px;
+      border: 3px solid #667eea;
+      border-radius: 12px;
+      background: #000;
+    }
+    
+    .video-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 14px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 20px;
+      border-radius: 8px;
+      display: none;
+    }
+    
+    button {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 10px;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    #status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .status-loading {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+    
+    .status-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .status-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .status-info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    
+    .links {
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    
+    .links a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .links a:hover {
+      text-decoration: underline;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 10px auto;
+      display: none;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .face-icon {
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="face-icon">👤</div>
+    <h2>🧠 NeuroFlow Suite</h2>
+    <p class="subtitle">Login with Face Recognition</p>
+    
+    <div class="video-container">
+      <video id="videoInput" autoplay muted playsinline></video>
+      <div class="video-overlay" id="videoOverlay">Position your face in the frame</div>
+    </div>
+    
+    <button id="loginBtn" disabled>Login with Face</button>
+    
+    <div class="spinner" id="spinner"></div>
+    <div id="status" style="display: none;"></div>
+    
+    <div class="links">
+      <p>New user? <a href="face-signup.html">Sign up here</a></p>
+      <p><a href="index.html">Use email/password instead</a></p>
+    </div>
+  </div>
+
+  <script>
+    let modelsLoaded = false;
+    let videoReady = false;
+
+    function showStatus(message, type) {
+      const status = document.getElementById('status');
+      const spinner = document.getElementById('spinner');
+      status.style.display = 'block';
+      status.className = `status-${type}`;
+      status.textContent = message;
+      
+      if (type === 'loading') {
+        spinner.style.display = 'block';
+      } else {
+        spinner.style.display = 'none';
+      }
+    }
+
+    async function startVideo() {
+      const video = document.getElementById('videoInput');
+      const overlay = document.getElementById('videoOverlay');
+      
+      try {
+        overlay.style.display = 'block';
+        overlay.textContent = 'Requesting camera access...';
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          } 
+        });
+        
+        video.srcObject = stream;
+        
+        video.addEventListener('loadeddata', () => {
+          overlay.style.display = 'none';
+          videoReady = true;
+          checkReadiness();
+        });
+        
+      } catch (err) {
+        console.error('Camera error:', err);
+        overlay.textContent = 'Camera access denied';
+        showStatus('Unable to access camera. Please allow camera permissions.', 'error');
+      }
+    }
+
+    async function loadModels() {
+      try {
+        showStatus('Loading face recognition models...', 'loading');
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+        ]);
+        
+        modelsLoaded = true;
+        showStatus('Ready to login!', 'success');
+        setTimeout(() => {
+          document.getElementById('status').style.display = 'none';
+        }, 2000);
+        checkReadiness();
+        
+      } catch (error) {
+        console.error('Model loading error:', error);
+        showStatus('Failed to load face recognition models. Please refresh.', 'error');
+      }
+    }
+
+    function checkReadiness() {
+      const loginBtn = document.getElementById('loginBtn');
+      if (modelsLoaded && videoReady) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = '✓ Ready - Login with Face';
+      }
+    }
+
+    async function loginWithFace() {
+      const loginBtn = document.getElementById('loginBtn');
+      loginBtn.disabled = true;
+      showStatus('Scanning face...', 'loading');
+      
+      const video = document.getElementById('videoInput');
+      
+      try {
+        const detection = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!detection) {
+          showStatus('No face detected. Please ensure your face is clearly visible and try again.', 'error');
+          loginBtn.disabled = false;
+          return;
+        }
+
+        const faceDescriptor = Array.from(detection.descriptor);
+        showStatus('Face detected! Authenticating...', 'loading');
+
+        const response = await fetch('http://localhost:5001/api/login/face', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ descriptor: faceDescriptor })
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          // Store authentication data
+          localStorage.setItem('neuroflow_token', data.token);
+          localStorage.setItem('neuroflow_user', JSON.stringify(data.user));
+          
+          showStatus(`✓ Welcome back, ${data.user.username}! Redirecting...`, 'success');
+          
+          // Redirect to dashboard after 1.5 seconds
+          setTimeout(() => {
+            window.location.href = '/dashboard.html'; // Change to your dashboard URL
+          }, 1500);
+          
+        } else {
+          showStatus(`Authentication failed: ${data.error}`, 'error');
+          loginBtn.disabled = false;
+        }
+        
+      } catch (error) {
+        console.error('Login error:', error);
+        showStatus('Network error. Please check your connection and try again.', 'error');
+        loginBtn.disabled = false;
+      }
+    }
+
+    // Event listeners
+    document.getElementById('loginBtn').addEventListener('click', loginWithFace);
+
+    // Initialize on page load
+    window.addEventListener('load', async function() {
+      // Check if already logged in
+      const token = localStorage.getItem('neuroflow_token');
+      if (token) {
+        showStatus('Already logged in. Redirecting...', 'info');
+        setTimeout(() => {
+          window.location.href = '/dashboard.html';
+        }, 1500);
+        return;
+      }
+      
+      await loadModels();
+      await startVideo();
+    });
+  </script>
+</body>
+</html>

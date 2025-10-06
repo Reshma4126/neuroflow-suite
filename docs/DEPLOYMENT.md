@@ -102,3 +102,45 @@ Returns:
 ## Troubleshooting
 
 ### Docker Issues
+Rebuild containers
+docker-compose build --no-cache
+
+View logs
+docker-compose logs backend
+docker-compose logs mongodb
+
+Restart services
+docker-compose restart
+
+### Database Connection Issues
+- Verify MongoDB URI format
+- Check network connectivity
+- Ensure credentials are correct
+
+---
+
+## Team Coordination
+
+### Integration Points
+- **Team Member 1**: JWT authentication middleware
+- **Team Member 2**: Frontend API calls
+- **Team Member 3**: ML model API endpoints
+- **Team Member 4**: Infrastructure & deployment
+
+### API Base URLs
+- Development: http://localhost:5000
+- Production: https://neuroflow-backend.onrender.com
+
+---
+
+## Security Checklist
+- [ ] Change default MongoDB passwords
+- [ ] Generate strong JWT secret
+- [ ] Enable HTTPS in production
+- [ ] Restrict CORS origins
+- [ ] Set up environment variable encryption
+- [ ] Enable Docker security scanning
+
+---
+
+**Deployed by Team Member 4 - DevOps Lead**
