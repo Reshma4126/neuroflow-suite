@@ -191,157 +191,126 @@
   </div>
 
   <script>
-    let modelsLoaded = false;
-    let videoReady = false;
+  const video = document.getElementById('videoInput');
+  const statusDiv = document.getElementById('status');
+  const loginBtn = document.getElementById('loginBtn');
+  const spinner = document.getElementById('spinner');
 
-    function showStatus(message, type) {
-      const status = document.getElementById('status');
-      const spinner = document.getElementById('spinner');
-      status.style.display = 'block';
-      status.className = `status-${type}`;
-      status.textContent = message;
+  let faceDescriptor = null;
+  let modelsLoaded = false;
+
+  function showStatus(message, type = 'info') {
+    statusDiv.style.display = 'block';
+    statusDiv.textContent = message;
+    statusDiv.className = `status-${type}`;
+  }
+
+  async function loadModels() {
+    try {
+      showStatus('Loading AI models...', 'info');
       
-      if (type === 'loading') {
-        spinner.style.display = 'block';
-      } else {
-        spinner.style.display = 'none';
-      }
-    }
-
-    async function startVideo() {
-      const video = document.getElementById('videoInput');
-      const overlay = document.getElementById('videoOverlay');
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
       
-      try {
-        overlay.style.display = 'block';
-        overlay.textContent = 'Requesting camera access...';
-        
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          } 
-        });
-        
-        video.srcObject = stream;
-        
-        video.addEventListener('loadeddata', () => {
-          overlay.style.display = 'none';
-          videoReady = true;
-          checkReadiness();
-        });
-        
-      } catch (err) {
-        console.error('Camera error:', err);
-        overlay.textContent = 'Camera access denied';
-        showStatus('Unable to access camera. Please allow camera permissions.', 'error');
-      }
-    }
-
-    async function loadModels() {
-      try {
-        showStatus('Loading face recognition models...', 'loading');
-        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-        
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
-        ]);
-        
-        modelsLoaded = true;
-        showStatus('Ready to login!', 'success');
-        setTimeout(() => {
-          document.getElementById('status').style.display = 'none';
-        }, 2000);
-        checkReadiness();
-        
-      } catch (error) {
-        console.error('Model loading error:', error);
-        showStatus('Failed to load face recognition models. Please refresh.', 'error');
-      }
-    }
-
-    function checkReadiness() {
-      const loginBtn = document.getElementById('loginBtn');
-      if (modelsLoaded && videoReady) {
-        loginBtn.disabled = false;
-        loginBtn.textContent = '✓ Ready - Login with Face';
-      }
-    }
-
-    async function loginWithFace() {
-      const loginBtn = document.getElementById('loginBtn');
-      loginBtn.disabled = true;
-      showStatus('Scanning face...', 'loading');
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
       
-      const video = document.getElementById('videoInput');
-      
-      try {
-        const detection = await faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks()
-          .withFaceDescriptor();
-
-        if (!detection) {
-          showStatus('No face detected. Please ensure your face is clearly visible and try again.', 'error');
-          loginBtn.disabled = false;
-          return;
-        }
-
-        const faceDescriptor = Array.from(detection.descriptor);
-        showStatus('Face detected! Authenticating...', 'loading');
-
-        const response = await fetch('http://localhost:5001/api/login/face', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ descriptor: faceDescriptor })
-        });
-
-        const data = await response.json();
-        
-        if (response.ok) {
-          // Store authentication data
-          localStorage.setItem('neuroflow_token', data.token);
-          localStorage.setItem('neuroflow_user', JSON.stringify(data.user));
-          
-          showStatus(`✓ Welcome back, ${data.user.username}! Redirecting...`, 'success');
-          
-          // Redirect to dashboard after 1.5 seconds
-          setTimeout(() => {
-            window.location.href = '/dashboard.html'; // Change to your dashboard URL
-          }, 1500);
-          
-        } else {
-          showStatus(`Authentication failed: ${data.error}`, 'error');
-          loginBtn.disabled = false;
-        }
-        
-      } catch (error) {
-        console.error('Login error:', error);
-        showStatus('Network error. Please check your connection and try again.', 'error');
-        loginBtn.disabled = false;
-      }
-    }
-
-    // Event listeners
-    document.getElementById('loginBtn').addEventListener('click', loginWithFace);
-
-    // Initialize on page load
-    window.addEventListener('load', async function() {
-      // Check if already logged in
-      const token = localStorage.getItem('neuroflow_token');
-      if (token) {
-        showStatus('Already logged in. Redirecting...', 'info');
-        setTimeout(() => {
-          window.location.href = '/dashboard.html';
-        }, 1500);
-        return;
-      }
-      
-      await loadModels();
+      modelsLoaded = true;
+      showStatus('Models loaded! Starting camera...', 'success');
       await startVideo();
-    });
-  </script>
+    } catch (error) {
+      console.error('Model loading error:', error);
+      showStatus('Failed to load AI models. Check internet connection.', 'error');
+    }
+  }
+
+  async function startVideo() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 } 
+      });
+      video.srcObject = stream;
+      
+      video.addEventListener('play', () => {
+        detectFace();
+      });
+    } catch (error) {
+      console.error('Camera error:', error);
+      showStatus('Camera access denied. Please allow camera permission.', 'error');
+    }
+  }
+
+  async function detectFace() {
+    if (!modelsLoaded || !video.videoWidth) return;
+
+    const detections = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (detections) {
+      faceDescriptor = Array.from(detections.descriptor);
+      showStatus('✓ Face detected! Ready to login.', 'success');
+      loginBtn.disabled = false;
+    } else {
+      faceDescriptor = null;
+      showStatus('No face detected. Please position yourself in the frame.', 'info');
+      loginBtn.disabled = true;
+    }
+
+    setTimeout(() => detectFace(), 100);
+  }
+
+  async function login() {
+    if (!faceDescriptor) {
+      showStatus('No face detected. Please wait...', 'error');
+      return;
+    }
+
+    loginBtn.disabled = true;
+    showStatus('Authenticating...', 'info');
+
+    try {
+      const response = await fetch('http://localhost:5001/api/login/face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor: faceDescriptor })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        showStatus('✓ Login successful! Redirecting...', 'success');
+        
+        // UPDATED: Store with user-specific keys
+        const userId = data.user.id;
+        localStorage.setItem(`neuroflow_token_${userId}`, data.token);
+        localStorage.setItem(`neuroflow_user_${userId}`, JSON.stringify(data.user));
+        localStorage.setItem('neuroflow_current_user', userId);
+        localStorage.setItem('neuroflow_active_users', 
+          JSON.stringify([...new Set([
+            ...(JSON.parse(localStorage.getItem('neuroflow_active_users') || '[]')),
+            userId
+          ])])
+        );
+
+        setTimeout(() => {
+          window.location.href = 'chatbot.html';
+        }, 1500);
+      } else {
+        showStatus('✗ ' + (data.error || 'Login failed'), 'error');
+        loginBtn.disabled = false;
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      showStatus('Network error. Please check your connection and try again.', 'error');
+      loginBtn.disabled = false;
+    }
+  }
+
+  loginBtn.addEventListener('click', login);
+  window.addEventListener('load', loadModels);
+</script>
+
 </body>
 </html>
